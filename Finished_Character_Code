@@ -1,0 +1,91 @@
+extends CharacterBody2D
+
+# ************** CODE PROVIDED: Node References **************
+@onready var animated_sprite_2d = $AnimatedSprite2D  
+@onready var steps_sound = $StepsSound
+@onready var jump_sound = $JumpSound
+
+# ************** CODE PROVIDED: Physics Process **************
+func _physics_process(delta):
+	apply_gravity(delta)
+	update_movement(delta)
+	update_jump(delta)
+	move_and_slide()
+	update_animation(delta)
+	death()
+	handle_sound(delta)
+
+# ************** TO DO: Gravity System **************
+@export var gravity = 840
+@export var gravity_max = 510
+
+func apply_gravity(delta):
+	if not is_on_floor():
+		velocity.y = min(velocity.y + gravity * delta, gravity_max)
+
+# ************** TO DO: Movement System **************
+@export var max_speed = 120
+@export var acceleration = 2880
+
+func update_movement(delta):
+	var x_input = Input.get_axis("left", "right")
+	velocity.x = move_toward(velocity.x, x_input * max_speed, acceleration * delta)
+	if x_input != 0:
+		animated_sprite_2d.flip_h = x_input < 0
+
+# ************** TO DO: Jumping System **************
+@export var jump_force = 260
+@export var jump_cut = 0.25
+
+func update_jump(_delta):
+	if is_on_floor() and Input.is_action_just_pressed("jump"):
+		velocity.y = -jump_force
+	elif Input.is_action_just_released("jump") and velocity.y < 0:
+		velocity.y *= jump_cut
+
+# ************** TO DO: Animation System **************
+var was_in_air = false  # Track previous air state
+
+func update_animation(delta):
+	if velocity.y < 0:
+		animated_sprite_2d.play("jump")
+	elif was_in_air and is_on_floor():  # Just landed check
+		animated_sprite_2d.scale = Vector2(1.3, 0.7)  # Squash effect on landing
+		was_in_air = false  # Reset flag
+	elif abs(velocity.x) > 10:
+		animated_sprite_2d.play("run")
+	else:
+		animated_sprite_2d.play("idle")
+
+	# Gradually reset scale to normal
+	animated_sprite_2d.scale = animated_sprite_2d.scale.lerp(Vector2(1.0, 1.0), delta * 10)
+
+	# Update air state
+	if not is_on_floor():
+		was_in_air = true
+
+# ************** TO DO: Death System **************
+func death():
+	if position.y > 150:
+		get_tree().reload_current_scene()
+
+# **************  CODE PROVIDED: Sound System **************
+var step_timer = 0.35
+var step_timer_counter = 0.0
+var just_entered_jumping = false
+
+func handle_sound(delta):
+	if is_on_floor() and abs(velocity.x) > 10:
+		step_timer_counter -= delta
+		if step_timer_counter <= 0:
+			steps_sound.play()
+			step_timer_counter = step_timer
+	else:
+		step_timer_counter = 0
+	
+	if velocity.y < 0 and not just_entered_jumping:
+		just_entered_jumping = true
+		jump_sound.play()
+	
+	if is_on_floor():
+		just_entered_jumping = false
